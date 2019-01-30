@@ -22,8 +22,14 @@ import javax.jcr.observation.EventIterator;
 import javax.jcr.observation.EventListener;
 import javax.jcr.observation.ObservationManager;
 import javax.jcr.observation.Event;
+import javax.jcr.version.Version;
+import javax.jcr.version.VersionHistory;
+import javax.jcr.version.VersionIterator;
+import javax.jcr.version.VersionManager;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 
 import com.day.cq.wcm.api.Page;
 
@@ -134,21 +140,78 @@ public class AutoVersionEventListener implements EventListener {
                     // Continue processing this Event
                 }
 
-                String id = event.getIdentifier();
-                int firstLastSlash = id.lastIndexOf("/");
-                int secondLastSlash = id.lastIndexOf("/", firstLastSlash - 1);
-                String base = id.substring(0, secondLastSlash);
+                log.info("Identifier: " + event.getIdentifier());
+                log.info("path: " + event.getPath());
 
-                if(!base.equals(EVENT_LISTENER_PATH)) {
+
+                String path = event.getPath();
+
+                // Extract base folder of current node (path without /page-name/jcr:content)
+                int firstDoubleDot = path.indexOf(":");
+                firstDoubleDot = (firstDoubleDot == -1) ? path.length() : firstDoubleDot;
+                int firstLastSlash = path.lastIndexOf("/", firstDoubleDot);
+                int secondLastSlash = path.lastIndexOf("/", firstLastSlash - 1);
+                String base = path.substring(0, secondLastSlash);
+
+                // Process only pages of EVENT_LISTENER_PATH
+                if(!EVENT_LISTENER_PATH.equals(base)) {
                     log.info("Wrong path: " + event.getPath());
                     log.info("Identifier: " + event.getIdentifier());
                     log.info("Base folder: " + base);
                     return;
                 }
 
-                //Create a node that represents the root node
+                // Extract page path EVENT_LISTENER_PATH/page-name
+                int pagePathLength = path.indexOf("/", EVENT_LISTENER_PATH.length() + 1);
+                String pagePath = path.substring(0, pagePathLength);
+                log.info("pagePath: " + pagePath);
+
+                // Create a node that represents the root node
                 Node root = session.getRootNode();
-                Node pageContent = root.getNode(id.substring(1));
+                // Get page node from root
+                Node pageNode = root.getNode(pagePath.substring(1));
+
+                log.info("pageNode: " + pageNode.getPath());
+                // Check pageNode is real node of page
+                boolean isPage = false;
+//////////////////////////////////////////////////////////////////////////////
+                if(pageNode.hasProperty("jcr:primaryType")) {
+                    String primaryType = pageNode.getProperty("jcr:primaryType").getName();
+                    isPage = "cq:Page".equals(primaryType);
+                    log.info("jcr:primaryType " + primaryType);
+                    log.info("jcr:primaryType " + pageNode.getProperty("jcr:primaryType").toString());
+                }
+                else {
+                    log.info("Do not have jcr:primaryType ");
+                }
+
+                if(!isPage) {
+                    log.info("Attention: it's not a page!");
+                }
+
+//                VersionManager mgr = session.getWorkspace().getVersionManager();
+//                // get version history
+//                VersionHistory vh = (VersionHistory) node.getParent().getParent();
+//                String vhId = vh.getIdentifier();
+//
+//                //  get the names of the versions
+//                List<String> names = new LinkedList<String>();
+//                VersionIterator vit = vh.getAllVersions();
+//                while (vit.hasNext()) {
+//                    Version v = vit.nextVersion();
+//                    if (!v.getName().equals("jcr:rootVersion")) {
+//                        log.info("Version: " + v.getName());
+//                        names.add(v.getName());
+//                    }
+//                }
+//
+//                // remove all versions
+//                for (String name: names) {
+//                    vh.removeVersion(name);
+//                }
+
+
+                Node pageContent = pageNode.getNode("jcr:content");
 
                 if(!pageContent.hasProperty("jcr:description")) {
                     log.info("jcr:description of page content {} is empty", event.getIdentifier());
@@ -173,6 +236,10 @@ public class AutoVersionEventListener implements EventListener {
                 log.info("User data: " + event.getUserData());
                 log.info("User ID: " + event.getUserID());
                 log.info("Info" + event.getInfo());
+
+
+
+
                 log.info("");
 
             }
