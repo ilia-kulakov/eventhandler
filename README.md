@@ -1,6 +1,23 @@
 Event Handler Demo: AEM 6.1
 ========
 
+
+Automatic Versioning Task
+
+Create OSGI service that subsribes for page content changes events under repository path /content/myapp. When such
+content modification event occurs service should create new page version automatically using Java API available.
+Content modification means any change with page content in repository, it could be change for page content itself or
+change of any component content that is placed on that page.
+
+The following requirements should be met:
+
+    OSGI service should work only with content of pages (Sibling nodes of cq:Page node type);
+    Service should take into account only pages located strictly under /content/myapp, not deeper;
+    Pages with empty jcr:description property in jcr:content should be ignored. Note that jcr:description is usually
+    empty for newly created pages so you will need to add it manually for pages for testing purposes;
+
+
+
 This a content package project generated using the multimodule-content-package-archetype.
 
 Building

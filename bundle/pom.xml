@@ -60,6 +60,20 @@
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.jcr.api</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.jackrabbit</groupId>
+            <artifactId>jackrabbit-jcr-commons</artifactId>
+            <version>2.10.3</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.jackrabbit</groupId>
+            <artifactId>jackrabbit-api</artifactId>
+            <version>2.10.3</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <!-- ====================================================================== -->
@@ -86,6 +100,7 @@
                 <configuration>
                     <instructions>
                         <Bundle-SymbolicName>edu.aem.training.eventhandler-bundle</Bundle-SymbolicName>
+
                     </instructions>
                 </configuration>
             </plugin>
