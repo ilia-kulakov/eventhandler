@@ -1,13 +1,12 @@
 package edu.aem.training.eventhandler;
 
+import com.day.cq.wcm.api.PageManager;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.Service;
-import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.jcr.api.SlingRepository;
-import org.osgi.framework.BundleContext;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,14 +21,8 @@ import javax.jcr.observation.EventIterator;
 import javax.jcr.observation.EventListener;
 import javax.jcr.observation.ObservationManager;
 import javax.jcr.observation.Event;
-import javax.jcr.version.Version;
-import javax.jcr.version.VersionHistory;
-import javax.jcr.version.VersionIterator;
-import javax.jcr.version.VersionManager;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 
 import com.day.cq.wcm.api.Page;
 
@@ -45,7 +38,7 @@ public class AutoVersionEventListener implements EventListener {
 
     private Logger log = LoggerFactory.getLogger(this.getClass());
 
-    private BundleContext bundleContext;
+    private ComponentContext componentContext;
 
     @Reference
     private SlingRepository repository;
@@ -64,7 +57,7 @@ public class AutoVersionEventListener implements EventListener {
     // Place app logic here to define the AEM Custom Event Handler
     protected void activate(ComponentContext ctx) {
 
-        this.bundleContext = ctx.getBundleContext();
+        this.componentContext = ctx;
 
         try {
             // Invoke the adapTo method to create a Session
@@ -106,13 +99,15 @@ public class AutoVersionEventListener implements EventListener {
         }
     }
 
-    // Define app logic that is fired when the even pccurs - simply track the time
+    // Define app logic that is fired when the even occurs - simply track the time
     // when the event occured
     public void onEvent(EventIterator eventIterator) {
         log.info("onEvent");
 
 
         try {
+
+            String pagePath = "";
 
             while (eventIterator.hasNext()) {
 
@@ -134,117 +129,172 @@ public class AutoVersionEventListener implements EventListener {
                     // A possible use-case for handling the event on EVERY member of a cluster would be clearing out an
                     // in memory (Service-level) cache.
 
-                    return;
+                    continue;
                 } else {
                     // Event originated from THIS server
                     // Continue processing this Event
                 }
 
-                log.info("Identifier: " + event.getIdentifier());
-                log.info("path: " + event.getPath());
-
-
                 String path = event.getPath();
 
+                if(isExcludedProperty(path)) {
+                    continue;
+                }
+
+                String id = event.getIdentifier();
+
+                log.info("Identifier: " + id);
+                log.info("path: " + path);
+
                 // Extract base folder of current node (path without /page-name/jcr:content)
-                int firstDoubleDot = path.indexOf(":");
-                firstDoubleDot = (firstDoubleDot == -1) ? path.length() : firstDoubleDot;
-                int firstLastSlash = path.lastIndexOf("/", firstDoubleDot);
-                int secondLastSlash = path.lastIndexOf("/", firstLastSlash - 1);
-                String base = path.substring(0, secondLastSlash);
+                String baseFolder = extractBaseFolder(path);
 
                 // Process only pages of EVENT_LISTENER_PATH
-                if(!EVENT_LISTENER_PATH.equals(base)) {
-                    log.info("Wrong path: " + event.getPath());
-                    log.info("Identifier: " + event.getIdentifier());
-                    log.info("Base folder: " + base);
-                    return;
+                if(!EVENT_LISTENER_PATH.equals(baseFolder)) {
+                    log.info("Wrong path: " + path);
+                    log.info("Identifier: " + id);
+                    log.info("Base folder: " + baseFolder);
+                    continue;
                 }
 
                 // Extract page path EVENT_LISTENER_PATH/page-name
-                int pagePathLength = path.indexOf("/", EVENT_LISTENER_PATH.length() + 1);
-                String pagePath = path.substring(0, pagePathLength);
+                pagePath = extractPagePath(path);
                 log.info("pagePath: " + pagePath);
 
                 // Create a node that represents the root node
                 Node root = session.getRootNode();
                 // Get page node from root
                 Node pageNode = root.getNode(pagePath.substring(1));
-
-                log.info("pageNode: " + pageNode.getPath());
                 // Check pageNode is real node of page
-                boolean isPage = false;
-//////////////////////////////////////////////////////////////////////////////
-                if(pageNode.hasProperty("jcr:primaryType")) {
-                    String primaryType = pageNode.getProperty("jcr:primaryType").getName();
-                    isPage = "cq:Page".equals(primaryType);
-                    log.info("jcr:primaryType " + primaryType);
-                    log.info("jcr:primaryType " + pageNode.getProperty("jcr:primaryType").toString());
-                }
-                else {
-                    log.info("Do not have jcr:primaryType ");
+                if(!isPageNode(pageNode)) {
+                    continue;
                 }
 
-                if(!isPage) {
-                    log.info("Attention: it's not a page!");
-                }
-
-//                VersionManager mgr = session.getWorkspace().getVersionManager();
-//                // get version history
-//                VersionHistory vh = (VersionHistory) node.getParent().getParent();
-//                String vhId = vh.getIdentifier();
-//
-//                //  get the names of the versions
-//                List<String> names = new LinkedList<String>();
-//                VersionIterator vit = vh.getAllVersions();
-//                while (vit.hasNext()) {
-//                    Version v = vit.nextVersion();
-//                    if (!v.getName().equals("jcr:rootVersion")) {
-//                        log.info("Version: " + v.getName());
-//                        names.add(v.getName());
-//                    }
-//                }
-//
-//                // remove all versions
-//                for (String name: names) {
-//                    vh.removeVersion(name);
-//                }
-
-
+                // At this point we know that the node is a page
                 Node pageContent = pageNode.getNode("jcr:content");
 
                 if(!pageContent.hasProperty("jcr:description")) {
-                    log.info("jcr:description of page content {} is empty", event.getIdentifier());
-                    return;
+                    log.info("jcr:description of page content {} is empty", id);
+                    continue;
                 }
 
-                HashMap<Integer, String> map = new HashMap<Integer, String>();
-                map.put(Event.NODE_ADDED, "Node added");
-                map.put(Event.NODE_MOVED, "Node moved");
-                map.put(Event.PROPERTY_ADDED, "Node property added");
-                map.put(Event.PROPERTY_CHANGED, "Node property changed");
-                map.put(Event.PROPERTY_REMOVED, "Node property removed");
 
-                String type = map.get( event.getType() );
-
-                log.info("");
-                log.info("*** Process Event ***");
-                log.info(type);
-                log.info("Base folder: " + base);
-                log.info("Path: " + event.getPath());
-                log.info("Identifier: " + event.getIdentifier());
-                log.info("User data: " + event.getUserData());
-                log.info("User ID: " + event.getUserID());
-                log.info("Info" + event.getInfo());
-
-
-
-
-                log.info("");
-
+                // We are ready to process event
+                logEventInfo(event);
+                createNewPageVersion(pagePath);
             }
 
+
+
         } catch (Exception e) {
+            log.info("ERROR: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private boolean isExcludedProperty(String path) {
+
+        final String[] excludeEls = new String[] {
+//                        "jcr:isCheckedOut",
+//                        "jcr:baseVersion",
+//                        "cq:siblingOrder",
+                        "jcr:lastModified",
+                        "cq:lastModified"
+                };
+
+        for(String ex : excludeEls) {
+            if(path.indexOf(ex) > -1) {
+                log.info("Exclude element: " + ex);
+                log.info("");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private String extractBaseFolder(String path) {
+
+        int firstDoubleDot = path.indexOf(":");
+        firstDoubleDot = (firstDoubleDot == -1) ? path.length() : firstDoubleDot;
+        int firstLastSlash = path.lastIndexOf("/", firstDoubleDot);
+        int secondLastSlash = path.lastIndexOf("/", firstLastSlash - 1);
+
+        return path.substring(0, secondLastSlash);
+    }
+
+    private String extractPagePath(String path) {
+
+        int pagePathLength = path.indexOf("/", EVENT_LISTENER_PATH.length() + 1);
+        return path.substring(0, pagePathLength);
+    }
+
+    private boolean isPageNode(Node node) {
+
+        // Check pageNode is real node of page
+        boolean isPage = false;
+
+        try {
+
+            if (node.hasProperty("jcr:primaryType")) {
+                Property prop = node.getProperty("jcr:primaryType");
+                String primaryType = prop.getString();
+                log.info("jcr:primaryType " + primaryType);
+                isPage = "cq:Page".equals(primaryType);
+
+            } else {
+                log.info("Node don't have jcr:primaryType ");
+            }
+
+            if (!isPage) {
+                log.info("Attention: it's not a page!");
+            }
+        }  catch (Exception e) {
+            log.info("ERROR: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return isPage;
+    }
+
+    private void logEventInfo(Event event) {
+
+        HashMap<Integer, String> map = new HashMap<Integer, String>();
+        map.put(Event.NODE_ADDED, "Node added");
+        map.put(Event.NODE_MOVED, "Node moved");
+        map.put(Event.PROPERTY_ADDED, "Node property added");
+        map.put(Event.PROPERTY_CHANGED, "Node property changed");
+        map.put(Event.PROPERTY_REMOVED, "Node property removed");
+
+        try {
+            log.info("");
+            log.info("*** Process Event ***");
+            log.info(map.get( event.getType() ));
+            log.info("Path: " + event.getPath() );
+            log.info("Identifier: " + event.getIdentifier());
+            log.info("User data: " + event.getUserData());
+            log.info("User ID: " + event.getUserID());
+            log.info("Info" + event.getInfo());
+        }  catch (Exception e) {
+            log.info("ERROR: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void createNewPageVersion(String pagePath) {
+
+        try {
+            ResourceResolver resourceResolver = resolverFactory.getAdministrativeResourceResolver(null);
+            //create a page manager instance
+            PageManager pageManager = resourceResolver.adaptTo(PageManager.class);
+            Page page = pageManager.getPage(pagePath);
+            this.deactivate(componentContext);
+            pageManager.createRevision(page);
+            this.activate(componentContext);
+            log.info("Page revision done!");
+
+            log.info("");
+        }  catch (Exception e) {
             log.info("ERROR: " + e.getMessage());
             e.printStackTrace();
         }
