@@ -1,6 +1,7 @@
 Event Handler Demo: AEM 6.1
 ========
 
+Task I
 
 Automatic Versioning Task
 
@@ -15,6 +16,20 @@ The following requirements should be met:
     Service should take into account only pages located strictly under /content/myapp, not deeper;
     Pages with empty jcr:description property in jcr:content should be ignored. Note that jcr:description is usually
     empty for newly created pages so you will need to add it manually for pages for testing purposes;
+
+
+
+Task II
+
+Job For Properties Removal Listening
+
+On each property removal under /content/myapp start a job which will:
+
+    create a node with unique name under "/var/log/removedProperties"
+    save propertyName and propertyPath under it
+    No restrictions on page/property depth level
+
+
 
 
 
