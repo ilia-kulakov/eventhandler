@@ -55,6 +55,7 @@ public class PropertyRemovalEventListener implements EventListener {
     // Place app logic here to define the AEM Custom Event Handler
     protected void activate(ComponentContext ctx) {
 
+
         this.componentContext = ctx;
 
         try {

@@ -71,7 +71,7 @@ public class AutoVersionEventListener implements EventListener {
             // Define the path
             final String path = EVENT_LISTENER_PATH;
             observationManager.addEventListener(this,
-                    Event.NODE_ADDED | Event.NODE_MOVED | Event.PROPERTY_ADDED | Event.PROPERTY_CHANGED | Event.PROPERTY_REMOVED,
+                    Event.PROPERTY_ADDED | Event.PROPERTY_REMOVED | Event.PROPERTY_CHANGED,
                     path,
                     true,        // [isDeep] events whose associated node is at path or within its subtree
                     null,    // [uuid] events whose associated node has one of the UUID's in this list
@@ -195,11 +195,15 @@ public class AutoVersionEventListener implements EventListener {
     private boolean isExcludedProperty(String path) {
 
         final String[] excludeEls = new String[] {
-//                        "jcr:isCheckedOut",
-//                        "jcr:baseVersion",
-//                        "cq:siblingOrder",
+                        "jcr:isCheckedOut",
+                        "jcr:baseVersion",
+                        "cq:siblingOrder",
                         "jcr:lastModified",
-                        "cq:lastModified"
+                        "cq:lastModified",
+                        "jcr:predecessors",
+                        "cq:childrenOrder",
+                        "cq:name",
+                        "cq:parentPath"
                 };
 
         for(String ex : excludeEls) {
@@ -288,9 +292,9 @@ public class AutoVersionEventListener implements EventListener {
             //create a page manager instance
             PageManager pageManager = resourceResolver.adaptTo(PageManager.class);
             Page page = pageManager.getPage(pagePath);
-            this.deactivate(componentContext);
+            //this.deactivate(componentContext);
             pageManager.createRevision(page);
-            this.activate(componentContext);
+            //this.activate(componentContext);
             log.info("Page revision done!");
 
             log.info("");
